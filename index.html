@@ -169,7 +169,7 @@ function qc(i){const c=COMMON[i];setD(date).foods.push({n:c[0],k:c[1],p:c[2],c:c
 function qr(i){setD(date).foods.push(JSON.parse(JSON.stringify(RECENT[i])));save();render()}
 function copyY(){getD(shift(date,-1)).foods.forEach(f=>setD(date).foods.push(JSON.parse(JSON.stringify(f))));save();render()}
 function after(){if(!window.claude){const e=$('#ed');if(e){const b=e.nextElementSibling,m=b&&b.nextElementSibling;e.remove();b&&b.remove();m&&m.remove()}}
-moveInd();if(!after.p){after.p=1;applyTheme();try{matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme)}catch(e){}try{navigator.storage.persist()}catch(e){}}}
+moveInd();if(!after.p){after.p=1;applyTheme();try{matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme)}catch(e){}autoImport();try{navigator.storage.persist()}catch(e){}}}
 const SL=()=>S.sleep||(S.sleep={}),sleepOf=d=>(S.sleep||{})[d]||null;
 const hrs=(b,w)=>{const x=b.split(':').map(Number),y=w.split(':').map(Number);let m=y[0]*60+y[1]-x[0]*60-x[1];if(m<=0)m+=1440;return m/60};
 const fmtH=h=>{const m=Math.round(h*60);return Math.floor(m/60)+'h '+(m%60)+'m'};
@@ -190,6 +190,7 @@ function saveSleep(){const b=$('#sb').value,w=$('#sw').value;if(!b||!w)return;SL
 function delSleep(){delete SL()[sd];save();render()}
 function applyTheme(){const r=document.documentElement,t=S.theme||'system';if(t==='system')r.removeAttribute('data-theme');else r.setAttribute('data-theme',t);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(r).getPropertyValue('--bg').trim()}
 function setTheme(t){S.theme=t;save();applyTheme();render()}
+function autoImport(){try{const q=new URLSearchParams(location.search);if(!['steps','weight','water'].some(k=>q.has(k)))return;const d=setD(q.get('date')||todayStr()),v=k=>n(String(q.get(k)).replace(/,/g,''));if(q.has('steps'))d.steps=v('steps');if(q.has('weight'))d.weight=v('weight');if(q.has('water'))d.water=v('water');save();history.replaceState(null,'',location.pathname);tab='today';render()}catch(e){}}
 function exp(){const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(S));a.download='daily-ledger-backup.json';a.click();S.lastBackup=todayStr();save()}
 function imp(el){const r=new FileReader();r.onload=()=>{try{S=Object.assign(S,JSON.parse(r.result));save();render()}catch(e){alert('That file could not be read.')}};if(el.files[0])r.readAsText(el.files[0])}
 function render(){$('#app').innerHTML=({home:vHome,today:vToday,progress:vProg,train:vTrain,other:vOther})[tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));if(dir){const a=$('#app');a.classList.remove('sl','sr');void a.offsetWidth;a.classList.add(dir==='r'?'sr':'sl');dir='';window.scrollTo(0,0)}after()}
