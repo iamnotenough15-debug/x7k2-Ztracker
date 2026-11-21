@@ -80,14 +80,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 const KEY='daily-ledger-v1',$=s=>document.querySelector(s),n=v=>parseFloat(v)||0;
 let S={setup:false,profile:{sex:'f',age:30,h:170,w:70,gw:65,act:1.375,rate:0.5,steps:8000},days:{},workouts:[],supps:[{id:'a1',name:'Vitamin D',dose:'2000 IU'},{id:'a2',name:'Omega-3',dose:'1 g'},{id:'a3',name:'Multivitamin',dose:'1 tablet'}]};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+let hkBusy=false,hkQuiet=false,hkT=null,hkBack=false,HKMSG='',_hk;
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(!hkBusy&&!hkQuiet)hkQ()};
 const todayStr=()=>new Date().toLocaleDateString('en-CA');
 let date=todayStr(),tab=S.setup?'home':'other',sub=S.setup?'sleep':'profile',sd=todayStr();
 const blank=()=>({foods:[],steps:0,water:0,weight:null,supps:{}});
 const getD=d=>S.days[d]||blank(),setD=d=>S.days[d]||(S.days[d]=blank());
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const shift=(d,k)=>{const t=new Date(d+'T12:00:00');t.setDate(t.getDate()+k);return t.toLocaleDateString('en-CA')};
-const pretty=d=>d===todayStr()?'Today':new Date(d+'T12:00:00').toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+const pretty=d=>d===todayStr()?'Today':new Date(d+'T12:00:00').toLocaleDateString(LOC(),{weekday:'short',month:'short',day:'numeric'});
 function T(){const p=S.profile;const bmr=10*p.w+6.25*p.h-5*p.age+(p.sex==='m'?5:-161),tdee=bmr*p.act;
  const dir=p.gw<p.w?-1:p.gw>p.w?1:0,floor=p.sex==='m'?1500:1200;let k=Math.round(Math.max(tdee+dir*p.rate*1100,floor));
  const pr=Math.round(1.8*p.w),fat=Math.round(k*.25/9),carb=Math.max(0,Math.round((k-pr*4-fat*9)/4));
@@ -126,7 +127,7 @@ function vProg(){const p=S.profile,t=T();const pts=Object.entries(S.days).filter
  if(pts.length>1){const ws=pts.map(x=>x[1].weight).concat(p.gw),mn=Math.min(...ws)-1,mx=Math.max(...ws)+1,W=320,H=150,px=i=>12+i*(W-24)/(pts.length-1),py=w=>H-14-(w-mn)/(mx-mn)*(H-28);
   chart=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Weight over time"><line x1="12" x2="${W-12}" y1="${py(p.gw)}" y2="${py(p.gw)}" stroke="var(--c)" stroke-dasharray="4 4"/><polyline fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linejoin="round" points="${pts.map((x,i)=>px(i)+','+py(x[1].weight)).join(' ')}"/>${pts.map((x,i)=>`<circle cx="${px(i)}" cy="${py(x[1].weight)}" r="3" fill="var(--acc)"/>`).join('')}</svg><div class="row sp mut"><span>${pts[0][0]}</span><span>dashed = goal ${p.gw} kg</span><span>${pts[pts.length-1][0]}</span></div>`}
  const days=[...Array(7)].map((_,i)=>shift(todayStr(),i-6)),mxs=Math.max(p.steps,...days.map(d=>getD(d).steps)),logged=days.filter(d=>getD(d).foods.length),avgK=logged.length?Math.round(logged.reduce((a,d)=>a+tot(d).k,0)/logged.length):0;
- const sb=`<div class="row" style="align-items:flex-end;height:90px;gap:6px">${days.map(d=>{const s=getD(d).steps;return `<div style="flex:1;text-align:center"><div style="height:${Math.max(3,s/mxs*70)}px;background:${s>=p.steps?'var(--acc)':'var(--line)'};border-radius:6px 6px 0 0"></div><div class="mut" style="font-size:11px">${new Date(d+'T12:00:00').toLocaleDateString(undefined,{weekday:'narrow'})}</div></div>`}).join('')}</div>`;
+ const sb=`<div class="row" style="align-items:flex-end;height:90px;gap:6px">${days.map(d=>{const s=getD(d).steps;return `<div style="flex:1;text-align:center"><div style="height:${Math.max(3,s/mxs*70)}px;background:${s>=p.steps?'var(--acc)':'var(--line)'};border-radius:6px 6px 0 0"></div><div class="mut" style="font-size:11px">${new Date(d+'T12:00:00').toLocaleDateString(LOC(),{weekday:'narrow'})}</div></div>`}).join('')}</div>`;
  return `<h1>Progress</h1><div class="card"><div class="row sp"><div><div class="big">${last}<span class="mut" style="font-size:16px"> kg</span></div><div class="mut">current · goal ${p.gw} kg</div></div><div style="text-align:right"><div style="font-weight:700;font-size:20px">${done>0?'−':''}${Math.abs(done).toFixed(1)} kg</div><div class="mut">${done>0?'lost':'change'} since start</div></div></div><div class="bar"><i style="width:${pct}%;background:var(--acc)"></i></div>${chart}</div>
 <div class="card"><h2>Last 7 days</h2>${sb}<div class="row sp" style="margin-top:10px"><span class="mut">Avg steps ${Math.round(days.reduce((a,d)=>a+getD(d).steps,0)/7)}</span><span class="mut">Avg intake ${avgK||'–'} kcal (target ${t.kcal})</span></div></div>
 <div class="card"><h2>Supplement streak</h2>${S.supps.map(x=>{const c=days.filter(d=>getD(d).supps[x.id]).length;return `<div class="row sp"><span>${esc(x.name)}</span><span class="mut">${c}/7 days</span></div><div class="bar"><i style="width:${c/7*100}%;background:var(--f)"></i></div>`}).join('')||'<p class="mut">No supplements added.</p>'}</div>`}
@@ -139,11 +140,11 @@ const tys=Object.entries(ty).sort((a,b)=>b[1]-a[1]),best=Math.max(0,...S.workout
 return `<h1>Training</h1><div class="card"><div class="row" style="justify-content:space-around">${ring(d.steps||0,sg,'var(--acc)',(d.steps||0).toLocaleString(),'of '+sg.toLocaleString()+' steps')}${ring(exOf(td),exg,'var(--c)',String(exOf(td)),'of '+exg+' min')}</div><div class="mut" style="text-align:center;margin-top:4px">${act?Math.round(act)+' active kcal today':'Steps and exercise come from Apple Watch through Health sync'}</div>
 <div class="g2" style="margin-top:12px"><div><label>Steps goal</label><input type="number" inputmode="numeric" value="${sg}" onchange="S.profile.steps=n(this.value)||8000;save();render()"></div><div><label>Exercise goal (min/day)</label><input type="number" inputmode="numeric" value="${exg}" onchange="S.profile.ex=n(this.value)||30;save();render()"></div></div></div>
 <div class="card"><h2>Calories burned</h2><div class="g2"><div><div class="big" style="font-size:30px">${Math.round(act)}</div><div class="mut">active today (kcal)</div></div><div><div class="big" style="font-size:30px">${Math.round(act+T().bmr)}</div><div class="mut">total today, estimated</div></div></div><div class="item" style="margin-top:10px"><span>Resting burn (estimate)</span><b>${T().bmr} kcal</b></div><div class="item"><span>Active this week</span><b>${Math.round(wk.reduce((a,x)=>a+activeOf(x),0))} kcal</b></div><p class="note">Total is active calories plus your estimated resting burn for the whole day. Active calories come from Apple Watch through Health sync, or from workouts you log.</p></div>
-<div class="card"><h2>This week</h2>${bar('Exercise',t7,150,'var(--acc)','min')}<div class="row" style="align-items:flex-end;height:110px;gap:6px">${wk.map((x,i)=>`<div style="flex:1;text-align:center"><div class="mut" style="font-size:11px">${mins[i]||''}</div><div style="height:${Math.max(3,mins[i]/mx*70)}px;background:${mins[i]>=exg?'var(--acc)':'var(--line)'};border-radius:6px 6px 0 0"></div><div class="mut" style="font-size:11px">${new Date(x+'T12:00:00').toLocaleDateString(undefined,{weekday:'narrow'})}</div></div>`).join('')}</div><p class="note">150 minutes a week is the usual adult guideline. ${ws.length} workout${ws.length===1?'':'s'} logged this week.</p></div>
+<div class="card"><h2>This week</h2>${bar('Exercise',t7,150,'var(--acc)','min')}<div class="row" style="align-items:flex-end;height:110px;gap:6px">${wk.map((x,i)=>`<div style="flex:1;text-align:center"><div class="mut" style="font-size:11px">${mins[i]||''}</div><div style="height:${Math.max(3,mins[i]/mx*70)}px;background:${mins[i]>=exg?'var(--acc)':'var(--line)'};border-radius:6px 6px 0 0"></div><div class="mut" style="font-size:11px">${new Date(x+'T12:00:00').toLocaleDateString(LOC(),{weekday:'narrow'})}</div></div>`).join('')}</div><p class="note">150 minutes a week is the usual adult guideline. ${ws.length} workout${ws.length===1?'':'s'} logged this week.</p></div>
 ${tys.length?`<div class="card"><h2>By type, this week</h2>${tys.map(x=>bar(x[0],x[1],tys[0][1],'var(--p)','min')).join('')}</div>`:''}
 <div class="card"><h2>Personal bests</h2><div class="item"><span>Longest workout</span><b>${best} min</b></div><div class="item"><span>Most steps in a day</span><b>${bs.toLocaleString()}</b></div><div class="item"><span>Total workouts</span><b>${S.workouts.length}</b></div></div>
-<div class="card"><h2>Log a workout</h2><form onsubmit="addW(event)"><div class="g2"><div><label>Type</label><select id="wt">${WT.map(x=>`<option>${x}</option>`).join('')}</select></div><div><label>Date</label><input id="wd" type="date" value="${td}"></div><div><label>Minutes</label><input id="wm" type="number" inputmode="numeric" min="1" required></div><div><label>kcal burned (optional)</label><input id="wk" type="number" inputmode="numeric" min="0"></div></div><input id="wn" placeholder="Notes: exercises, sets, distance…" style="margin:8px 0"><button class="btn" style="width:100%">Save workout</button></form></div>
-<div class="card"><h2>History</h2>${[...S.workouts].sort((a,b)=>a.d<b.d?1:-1).slice(0,20).map(w=>`<div class="item"><div>${esc(w.t)} · ${w.m} min${w.k?' · '+w.k+' kcal':''}<div class="mut">${pretty(w.d)}${w.n?' — '+esc(w.n):''}</div></div><button class="x" onclick="delW('${w.id}')" aria-label="Remove">×</button></div>`).join('')||'<p class="mut">No workouts yet. Log your first session above.</p>'}</div>`}
+<div class="card"><h2>Log a workout</h2><form onsubmit="addW(event)"><div class="g2"><div><label>Type</label><select id="wt" onchange="wtChange()">${WT.map(x=>`<option>${x}</option>`).join('')}</select></div><div><label>Date</label><input id="wd" type="date" value="${td}"></div><div><label>Minutes (optional)</label><input id="wm" type="number" inputmode="numeric" min="0"></div><div><label>kcal burned (optional)</label><input id="wk" type="number" inputmode="numeric" min="0"></div></div><div id="wst" style="display:none;margin-top:8px"><label>Steps</label><input id="ws" type="number" inputmode="numeric" min="0" oninput="wsHint()"><p id="wsh" class="note" style="margin:4px 0 0"></p></div><input id="wn" placeholder="Notes: exercises, sets, distance…" style="margin:8px 0"><button class="btn" style="width:100%">Save workout</button></form></div>
+<div class="card"><h2>History</h2>${[...S.workouts].sort((a,b)=>a.d<b.d?1:-1).slice(0,20).map(w=>`<div class="item"><div>${esc(w.t)}${w.m?' · '+w.m+' min':''}${w.s?' · '+w.s.toLocaleString()+' steps':''}${w.k?' · '+w.k+' kcal':''}<div class="mut">${pretty(w.d)}${w.n?' — '+esc(w.n):''}</div></div><button class="x" onclick="delW('${w.id}')" aria-label="Remove">×</button></div>`).join('')||'<p class="mut">No workouts yet. Log your first session above.</p>'}</div>`}
 const rvd=x=>(S.revives||[]).some(r=>r.day===x),hasD=x=>getD(x).foods.length>0||rvd(x);
 function curStreak(){let x=todayStr();if(!hasD(x))x=shift(x,-1);let c=0;while(hasD(x)){c++;x=shift(x,-1)}return c}
 function flame(n){const big=n>=100,sc=1+Math.min(n,100)*.006,c1=big?'#b46bff':'#ff8a1f',c2=big?'#5b27c9':'#e8401c',c3=big?'#ecd8ff':'#ffd25a',sz=Math.round(110*sc);
@@ -151,8 +152,12 @@ return `<div style="position:relative;width:${sz}px;height:${sz}px;margin:0 auto
 function vStreak(){const c=curStreak(),st=stats(),t=T(),p=S.profile,ws=Object.entries(S.days).filter(x=>x[1].weight).sort((a,b)=>a[0]<b[0]?-1:1).map(x=>x[1].weight),lw=ws.length?ws[ws.length-1]:null,days=[...Array(14)].map((_,i)=>shift(todayStr(),i-13)),g=(l,v)=>`<div class="item"><span>${l}</span><b>${v}</b></div>`;
 return `<h1>Streak</h1><div class="card" style="text-align:center">${flame(c)}<div style="font-size:18px;font-weight:700;margin-top:8px">${c===1?'1 day streak':c+' day streak'}</div><div class="mut">Best ${st.best} · log a food every day${c>=100?' · purple flame unlocked':' · the flame turns purple at 100'}</div><div class="row" style="justify-content:center;gap:5px;margin-top:12px">${days.map(x=>`<span style="width:14px;height:14px;border-radius:50%;background:${hasD(x)?(c>=100?'#9b59d6':'var(--c)'):'var(--line)'}${rvd(x)?';outline:2px solid var(--acc);outline-offset:1px':''}"></span>`).join('')}</div>${reviveHtml()}</div>
 <div class="card"><div class="row sp" style="margin-bottom:6px"><h2 style="margin:0">Your goals</h2><button class="btn alt" style="padding:6px 12px;font-size:13px" onclick="sub='profile';go('other')">Edit</button></div>${g('Calories',t.kcal+' kcal')}${g('Protein / carbs / fat',t.pr+' / '+t.carb+' / '+t.fat+' g')}${g('Steps',p.steps.toLocaleString()+' per day')}${g('Exercise',(p.ex||30)+' min per day')}${g('Water',(t.water/1000).toFixed(1)+' L per day')}${g('Sleep',(p.sleep||8)+' h per night')}${g('Weight',(lw?lw+' → ':'')+p.gw+' kg')}</div>${vBadges()}`}
-function addW(e){e.preventDefault();S.workouts.push({id:'w'+Date.now(),t:$('#wt').value,d:$('#wd').value,m:n($('#wm').value),k:n($('#wk').value),n:$('#wn').value.trim()});save();render()}
-function delW(id){S.workouts=S.workouts.filter(w=>w.id!==id);save();render()}
+const KPS=600/21891;
+function wtChange(){const w=['Walk','Hike'].includes($('#wt').value),b=$('#wst');if(b)b.style.display=w?'block':'none';wsHint()}
+function wsHint(){const st=n($('#ws').value),h=$('#wsh');if(h)h.textContent=st>0?'≈ '+Math.round(st*KPS)+' kcal burned (about 0.027 kcal per step)':''}
+function addW(e){e.preventDefault();const t=$('#wt').value,st=['Walk','Hike'].includes(t)?Math.round(n($('#ws').value)):0,m=n($('#wm').value);let k=n($('#wk').value);if(!k&&st>0)k=Math.round(st*KPS);if(!m&&!k&&!st)return;
+const w={id:'w'+Date.now(),t,d:$('#wd').value,m,k,n:$('#wn').value.trim()};if(st>0){w.s=st;if(!HK()){const dd=setD(w.d);dd.steps=(dd.steps||0)+st;w.as=1}}S.workouts.push(w);save();render()}
+function delW(id){const w=S.workouts.find(x=>x.id===id);if(w&&w.as)setD(w.d).steps=Math.max(0,(getD(w.d).steps||0)-w.s);S.workouts=S.workouts.filter(x=>x.id!==id);save();render()}
 function setP(k,v){S.profile[k]=['sex'].includes(k)?v:n(v);S.setup=true;save();render()}
 function vProf(){const p=S.profile,t=T(),f=(l,k,s='')=>`<div><label>${l}</label><input type="number" inputmode="decimal" step="${s||1}" value="${p[k]}" onchange="setP('${k}',this.value)"></div>`;
  return `<h1>Goals and targets</h1>${S.setup?'':'<p class="mut" style="margin-top:-6px">Enter your details to get daily targets.</p>'}<div class="card"><div class="g2"><div><label>Sex (for the formula)</label><select onchange="setP('sex',this.value)"><option value="f" ${p.sex==='f'?'selected':''}>Female</option><option value="m" ${p.sex==='m'?'selected':''}>Male</option></select></div>${f('Age','age')}${f('Height (cm)','h')}${f('Current weight (kg)','w','0.1')}${f('Goal weight (kg)','gw','0.1')}${f('Daily steps goal','steps')}
@@ -161,8 +166,9 @@ function vProf(){const p=S.profile,t=T(),f=(l,k,s='')=>`<div><label>${l}</label>
 <div class="card"><h2>Your daily intake</h2><div class="row sp"><div class="big" style="color:var(--acc)">${t.kcal}<span class="mut" style="font-size:16px"> kcal</span></div><div class="mut" style="text-align:right">Maintenance ${t.tdee}<br>Resting burn ${t.bmr}</div></div>
 <div class="g4" style="margin-top:12px;text-align:center"><div><b style="color:var(--p)">${t.pr}g</b><div class="mut">protein</div></div><div><b style="color:var(--c)">${t.carb}g</b><div class="mut">carbs</div></div><div><b style="color:var(--f)">${t.fat}g</b><div class="mut">fat</div></div><div><b>${t.fiber}g</b><div class="mut">fiber</div></div></div>
 <p class="note">Water ≈ ${t.water} ml/day.${t.floored?' Target is held at a safe minimum, so your pace may be slower than selected.':''} These are estimates (Mifflin‑St Jeor, protein 1.8 g/kg, fat 25% of calories), not medical advice. Check with a doctor or dietitian before major changes.</p></div>
+<div class="card"><h2>Language</h2><div class="row"><button class="btn ${(S.lang||'en')==='en'?'':'alt'}" style="flex:1" onclick="setLang('en')">English</button><button class="btn ${S.lang==='ro'?'':'alt'}" style="flex:1" onclick="setLang('ro')">Română</button></div></div>
 <div class="card"><h2>AI key (optional)</h2><p class="mut" style="margin-top:0">Needed for the label scanner and food estimates when this page is not opened inside Claude. Get a free key at aistudio.google.com. Photos you scan are sent to Google. Never share this key.</p><input type="password" id="gk" placeholder="Paste Gemini API key" value="${esc(S.gkey||'')}" autocomplete="off"><input id="gm" placeholder="Model" value="${esc(S.gmodel||'gemini-2.5-flash')}" style="margin-top:8px"><div class="row" style="margin-top:8px"><button class="btn alt" style="flex:1" onclick="saveKey()">Save key</button><button class="btn" style="flex:1" onclick="testKey()">Test and pick model</button></div><p id="gt" class="note"></p></div>
-<div class="card"><h2>Appearance</h2><div class="row">${[['system','Auto'],['light','Light'],['dark','Dark']].map(a=>`<button class="btn ${(S.theme||'system')===a[0]?'':'alt'}" style="flex:1" onclick="setTheme('${a[0]}')">${a[1]}</button>`).join('')}</div><p class="note">Auto follows your phone. Light is the beige theme.</p></div>
+<div class="card"><h2>Appearance</h2><div class="row">${[['system','Auto'],['light','Light'],['dark','Dark']].map(a=>`<button class="btn ${(S.theme||'light')===a[0]?'':'alt'}" style="flex:1" onclick="setTheme('${a[0]}')">${a[1]}</button>`).join('')}</div><p class="note">Auto follows your phone. Light is the beige theme.</p></div>
 <div class="card"><h2>Your data</h2><p class="mut" style="margin-top:0">Saved in this browser only. ${S.lastBackup?'Last backup: '+S.lastBackup+'.':'You haven’t backed up yet.'} Export keeps it safe or moves it to another device.</p><div class="row"><button class="btn alt" onclick="exp()">Export</button><button class="btn alt" onclick="$('#imp').click()">Import</button><input id="imp" type="file" accept=".json" hidden onchange="imp(this)"></div></div>`}
 function vSync(){return `<h1>Apple Health sync</h1>
 <div class="card"><h2>Health → Ledger</h2><p class="mut" style="margin-top:0">Your Apple Watch already saves steps and weight to Health. Run your “Health to Ledger” Shortcut, then paste what it copied.</p><textarea id="hin" rows="3" placeholder='{"steps":8421,"weight":68.4,"water":1500}'></textarea><button class="btn" style="margin-top:8px;width:100%" onclick="impH()">Import into ${pretty(date).toLowerCase()}</button></div>
@@ -175,7 +181,7 @@ let EST={fi:0,mi:{}},PH=null;
 const RDA=[['vitA','Vitamin A',800,'µg'],['vitC','Vitamin C',90,'mg'],['vitD','Vitamin D',15,'µg'],['b12','Vitamin B12',2.4,'µg'],['folate','Folate',400,'µg'],['calcium','Calcium',1000,'mg'],['iron','Iron',14,'mg'],['magnesium','Magnesium',350,'mg'],['potassium','Potassium',3400,'mg'],['sodium','Sodium',2300,'mg'],['zinc','Zinc',11,'mg'],['vitE','Vitamin E',15,'mg'],['vitK','Vitamin K',120,'µg']];
 function microOf(d){const o={},dd=getD(d);dd.foods.forEach(f=>{for(const k in (f.mi||{}))o[k]=(o[k]||0)+n(f.mi[k])});S.supps.forEach(x=>{if(dd.supps[x.id]&&x.nu&&x.amt)o[x.nu]=(o[x.nu]||0)+x.amt});return o}
 function microCard(){const o=microOf(todayStr());return `<div class="card"><h2>Vitamins and minerals</h2>${RDA.map(r=>bar(r[1],o[r[0]]||0,r[2],'var(--f)',r[3])).join('')}<p class="note">${RDA.some(r=>o[r[0]])?'':'Nothing counted yet. '}From estimated foods plus supplements you tick that have an amount. Compared with typical adult amounts.</p></div>`}
-function pick(el){PH=el.files[0]||null;$('#em').textContent=PH?'Photo added. Tap Estimate with Claude.':''}
+function pick(el){PH=el.files[0]||null;$('#em').textContent=PH?'Photo added. Tap Estimate.':''}
 async function testKey(){const k=$('#gk').value.trim(),m=$('#gt'),B='https://generativelanguage.googleapis.com/v1beta/';if(!k){m.textContent='Paste a key first.';return}m.textContent='Testing…';
 try{const r=await fetch(B+'models?pageSize=200&key='+encodeURIComponent(k)),j=await r.json();
 if(!r.ok){m.textContent='Google says: '+((j.error&&j.error.message)||r.status);return}
@@ -223,12 +229,12 @@ function quickAdd(){const cnt={};Object.values(S.days).forEach(d=>d.foods.forEac
 RECENT=Object.values(cnt).sort((a,b)=>b.c-a.c).slice(0,8).map(e=>e.f);
 const chip='class="btn alt" style="padding:6px 11px;font-size:13px"',y=getD(shift(date,-1)).foods.length;
 return `${mealsHtml(chip)}<div class="row" style="flex-wrap:wrap;margin-bottom:8px">${RECENT.map((f,i)=>`<button type="button" ${chip} onclick="qr(${i})">${esc(f.n)}</button>`).join('')}${y?`<button type="button" ${chip} onclick="copyY()">Copy yesterday</button>`:''}</div><input id="cs" placeholder="Search common foods: egg, rice, banana…" oninput="srch(this.value)" style="margin-bottom:8px"><div id="cr" class="row" style="flex-wrap:wrap;margin-bottom:10px"></div>`}
-function srch(v){v=v.trim().toLowerCase();$('#cr').innerHTML=v.length<2?'':COMMON.map((c,i)=>[c,i]).filter(x=>x[0][0].toLowerCase().includes(v)).slice(0,8).map(x=>`<button type="button" class="btn alt" style="padding:6px 11px;font-size:13px" onclick="qc(${x[1]})">${esc(x[0][0])} · ${x[0][1]} kcal</button>`).join('')||'<span class="mut">No match. Add it by hand below.</span>'}
+function srch(v){v=v.trim().toLowerCase();$('#cr').innerHTML=v.length<2?'':COMMON.map((c,i)=>[c,i]).filter(x=>(trs(x[0][0])+' '+x[0][0]).toLowerCase().includes(v)).slice(0,8).map(x=>`<button type="button" class="btn alt" style="padding:6px 11px;font-size:13px" onclick="qc(${x[1]})">${esc(x[0][0])} · ${x[0][1]} kcal</button>`).join('')||'<span class="mut">No match. Add it by hand below.</span>'}
 function qc(i){const c=COMMON[i];setD(date).foods.push({n:c[0],k:c[1],p:c[2],c:c[3],f:c[4],fi:c[5],mi:{}});save();render()}
 function qr(i){setD(date).foods.push(JSON.parse(JSON.stringify(RECENT[i])));save();render()}
 function copyY(){getD(shift(date,-1)).foods.forEach(f=>setD(date).foods.push(JSON.parse(JSON.stringify(f))));save();render()}
 function after(){if(!window.claude&&!S.gkey){const e=$('#ed');if(e){const b=e.nextElementSibling,m=b&&b.nextElementSibling;e.remove();b&&b.remove();m&&m.remove()}}
-moveInd();checkBadges();if(!after.p){after.p=1;applyTheme();try{matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme)}catch(e){}autoImport();try{navigator.storage.persist()}catch(e){}}}
+moveInd();checkBadges();if(!after.p){after.p=1;roStart();setTimeout(()=>hkSync(),900);document.addEventListener('visibilitychange',()=>{if(!document.hidden)hkSync()});applyTheme();try{matchMedia('(prefers-color-scheme:dark)').addEventListener('change',applyTheme)}catch(e){}autoImport();try{navigator.storage.persist()}catch(e){}}}
 const SL=()=>S.sleep||(S.sleep={}),sleepOf=d=>(S.sleep||{})[d]||null;
 const hrs=(b,w)=>{const x=b.split(':').map(Number),y=w.split(':').map(Number);let m=y[0]*60+y[1]-x[0]*60-x[1];if(m<=0)m+=1440;return m/60};
 const fmtH=h=>{const m=Math.round(h*60);return Math.floor(m/60)+'h '+(m%60)+'m'};
@@ -239,16 +245,16 @@ const tile=(l,v,sub,act)=>`<div class="card" style="margin:0;padding:14px;cursor
 return `<h1>${gr}</h1><div class="card"><div class="row" style="gap:14px">${ring(s.k,t.kcal,left<0?'var(--bad)':'var(--acc)',Math.abs(Math.round(left)),left<0?'kcal over':'kcal left')}<div style="flex:1">${bar('Protein',s.p,t.pr,'var(--p)','g')}${bar('Carbs',s.c,t.carb,'var(--c)','g')}${bar('Fat',s.f,t.fat,'var(--f)','g')}</div></div></div>
 <div class="card" style="padding:14px">${bar('Steps',d.steps||0,S.profile.steps,'var(--acc)','')}</div>
 <div class="g2" style="margin-bottom:14px">${tile('Steps',(d.steps||0).toLocaleString(),'goal '+S.profile.steps.toLocaleString(),"go('today')")}${tile('Water',((d.water||0)/1000).toFixed(1)+' L','goal '+(t.water/1000).toFixed(1)+' L',"go('today')")}${tile('Sleep',sl?fmtH(sl.h):'–',sl?'quality '+sl.q+'/5':'Log last night',"sub='sleep';go('other')")}${tile('Weight',lw?lw[1].weight+' kg':'–','goal '+S.profile.gw+' kg',"go('today')")}${tile('Vitamins',done+'/'+S.supps.length,'taken today',"go('today')")}${tile('Training',wm+' min','today',"go('train')")}</div>
-${microCard()}<div class="row"><button class="btn" style="flex:1" onclick="go('today')">Log food</button><button class="btn alt" style="flex:1" onclick="sub='sleep';go('other')">Log sleep</button></div><button class="btn" style="width:100%;margin-top:10px;padding:14px;font-size:16px" onclick="go('scan')">Scan a label</button><button class="btn alt" style="width:100%;margin-top:10px" onclick="pasteH()">Import from Health</button>`}
+${microCard()}<div class="row"><button class="btn" style="flex:1" onclick="go('today')">Log food</button><button class="btn alt" style="flex:1" onclick="sub='sleep';go('other')">Log sleep</button></div><button class="btn" style="width:100%;margin-top:10px;padding:14px;font-size:16px" onclick="go('scan')">Scan a label</button>${HK()?`<button class="btn alt" style="width:100%;margin-top:10px" onclick="hkSync(true)">Sync Apple Health</button><div class="note" style="text-align:center">${esc(HKMSG||'Not synced yet')}</div>`:`<button class="btn alt" style="width:100%;margin-top:10px" onclick="pasteH()">Import from Health</button>`}`}
 function vOther(){const tabs=[['trends','Trends'],['sleep','Sleep'],['profile','Settings'],['sync','Health']];
 return `<div class="row" style="margin-bottom:12px">${tabs.map(t=>`<button class="btn ${sub===t[0]?'':'alt'}" style="flex:1;padding:9px 4px;font-size:13px" onclick="sub='${t[0]}';render()">${t[1]}</button>`).join('')}</div>`+({trends:vTrends,sleep:vSleep,profile:vProf,sync:vSync})[sub]()}
 function vSleep(){const g=S.profile.sleep||8,e=sleepOf(sd),days=[...Array(7)].map((_,i)=>shift(todayStr(),i-6)),vals=days.map(d=>{const x=sleepOf(d);return x?x.h:0}),lg=vals.filter(v=>v),tl=lg.reduce((a,b)=>a+b,0),avg=lg.length?tl/lg.length:0,debt=Math.max(0,g*lg.length-tl),mx=Math.max(g,...vals);
 return `<h1>Sleep</h1><div class="card"><div class="row sp"><div><div class="big">${e?fmtH(e.h):'–'}</div><div class="mut">${e?'quality '+e.q+'/5 · night ending '+pretty(sd).toLowerCase():'no entry for '+pretty(sd).toLowerCase()}</div></div><div style="text-align:right"><div style="font-weight:700;font-size:20px">${avg?fmtH(avg):'–'}</div><div class="mut">7-day average</div></div></div><div style="margin-top:12px">${bar('Selected night',e?e.h:0,g,'var(--p)','h')}</div><div class="mut">${lg.length?'Sleep debt this week: '+fmtH(debt):'Log a night to see your weekly balance.'}</div></div>
 <div class="card"><h2>Log a night</h2><div class="g2"><div><label>Night ending on</label><input type="date" value="${sd}" onchange="sd=this.value||todayStr();render()"></div><div><label>Quality (1–5)</label><select id="sq">${[1,2,3,4,5].map(q=>`<option ${(e?e.q:3)==q?'selected':''}>${q}</option>`).join('')}</select></div><div><label>Bedtime</label><input id="sb" type="time" value="${e?e.bed:'23:00'}"></div><div><label>Wake up</label><input id="sw" type="time" value="${e?e.wake:'07:00'}"></div></div><div class="row" style="margin-top:10px"><button class="btn" style="flex:1" onclick="saveSleep()">Save night</button>${e?'<button class="btn alt" onclick="delSleep()">Delete</button>':''}</div><div style="margin-top:12px"><label>Sleep goal (hours)</label><input type="number" step="0.5" inputmode="decimal" value="${g}" onchange="S.profile.sleep=n(this.value)||8;save();render()"></div></div>
-<div class="card"><h2>Last 7 days</h2><div class="row" style="align-items:flex-end;height:120px;gap:6px">${days.map((d,i)=>`<div style="flex:1;text-align:center"><div class="mut" style="font-size:11px">${vals[i]?vals[i].toFixed(1):''}</div><div style="height:${Math.max(3,vals[i]/mx*70)}px;background:${vals[i]>=g?'var(--p)':'var(--line)'};border-radius:6px 6px 0 0"></div><div class="mut" style="font-size:11px">${new Date(d+'T12:00:00').toLocaleDateString(undefined,{weekday:'narrow'})}</div></div>`).join('')}</div></div>`}
+<div class="card"><h2>Last 7 days</h2><div class="row" style="align-items:flex-end;height:120px;gap:6px">${days.map((d,i)=>`<div style="flex:1;text-align:center"><div class="mut" style="font-size:11px">${vals[i]?vals[i].toFixed(1):''}</div><div style="height:${Math.max(3,vals[i]/mx*70)}px;background:${vals[i]>=g?'var(--p)':'var(--line)'};border-radius:6px 6px 0 0"></div><div class="mut" style="font-size:11px">${new Date(d+'T12:00:00').toLocaleDateString(LOC(),{weekday:'narrow'})}</div></div>`).join('')}</div></div>`}
 function saveSleep(){const b=$('#sb').value,w=$('#sw').value;if(!b||!w)return;SL()[sd]={bed:b,wake:w,h:hrs(b,w),q:n($('#sq').value)||3};save();render()}
 function delSleep(){delete SL()[sd];save();render()}
-function applyTheme(){const r=document.documentElement,t=S.theme||'system';if(t==='system')r.removeAttribute('data-theme');else r.setAttribute('data-theme',t);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(r).getPropertyValue('--bg').trim()}
+function applyTheme(){const r=document.documentElement,t=S.theme||'light';if(t==='system')r.removeAttribute('data-theme');else r.setAttribute('data-theme',t);const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(r).getPropertyValue('--bg').trim()}
 function setTheme(t){S.theme=t;save();applyTheme();render()}
 function autoImport(){try{const q=new URLSearchParams(location.search);if(!['steps','weight','water','exercise','active'].some(k=>q.has(k)))return;const d=setD(q.get('date')||todayStr()),v=k=>n(String(q.get(k)).replace(/,/g,''));if(q.has('steps'))d.steps=v('steps');if(q.has('weight'))d.weight=v('weight');if(q.has('water'))d.water=v('water');if(q.has('exercise'))d.exercise=v('exercise');if(q.has('active'))d.active=v('active');save();history.replaceState(null,'',location.pathname);tab='today';render()}catch(e){}}
 async function pasteH(){try{const t=await navigator.clipboard.readText(),d=setD((t.match(/date\W{0,4}(\d{4}-\d{2}-\d{2})/)||[])[1]||todayStr());let c=0;['steps','weight','water','exercise','active'].forEach(k=>{const m=t.match(new RegExp(k+'\\W{0,4}([\\d.,]+)','i'));if(m){d[k]=n(m[1].replace(/,/g,''));c++}});if(!c)throw 0;save();render()}catch(e){alert('Nothing to import. Run your Health Shortcut first, then tap this again.')}}
@@ -420,6 +426,537 @@ try{const j=await fj('https://world.openfoodfacts.org/cgi/search.pl?search_terms
 function logScan(){const l=SCAN&&SCAN.log;if(!l)return;setD(date).foods.push({n:[SCAN.brand,l.n].filter(Boolean).join(' '),k:l.k,p:l.p,c:l.c,f:l.f,fi:l.fi,mi:miOf(SCAN,SCAN.fac||1)});save();toast('!Logged '+l.n)}
 function fullName(r){const b=String(r.brand||'').trim(),nm=String(r.name||'Unknown product').trim();return b&&!nm.toLowerCase().includes(b.toLowerCase())?b+' '+nm:nm}
 function ingText(r){return Array.isArray(r.ingredients)?r.ingredients.join(', '):String(r.ingredients||'').trim()}
+const ROXS=`Home|Acasă
+Log|Jurnal
+Training|Antrenament
+Streak|Serie
+Other|Altele
+Health|Sănătate
+Today|Azi
+Trends|Tendințe
+Sleep|Somn
+Settings|Setări
+Progress|Progres
+Back|Înapoi
+Add|Adaugă
+Save|Salvează
+Delete|Șterge
+Remove|Elimină
+Edit|Editează
+Close|Închide
+Copy|Copiază
+Export|Exportă
+Import|Importă
+Search|Caută
+Look up|Caută
+Decline|Refuză
+Log it|Adaugă
+Date|Data
+Name|Nume
+Type|Tip
+Amount|Cantitate
+Minutes|Minute
+Model|Model
+Auto|Auto
+Light|Luminos
+Dark|Întunecat
+Female|Feminin
+Male|Masculin
+Sedentary|Sedentar
+Light (1–3 workouts/wk)|Ușor (1–3 antrenamente/săpt.)
+Moderate|Moderat
+Very active|Foarte activ
+Meal|Masă
+Food|Mâncare
+Core|Core
+Calories|Calorii
+Weight|Greutate
+Water|Apă
+Steps|Pași
+Sugar|Zahăr
+Salt|Sare
+Fiber|Fibre
+Protein|Proteine
+Carbs|Carbohidrați
+Fat|Grăsimi
+Energy|Energie
+Allergens|Alergeni
+Exercise|Exercițiu
+Vitamins|Vitamine
+Product|Produs
+Estimate|Estimează
+Language|Limbă
+Appearance|Aspect
+Calcium|Calciu
+Iron|Fier
+Magnesium|Magneziu
+Potassium|Potasiu
+Sodium|Sodiu
+Folate|Folat`,ROS=`Minutes (optional)|Minute (opțional)
+burned (about 0.027 kcal per step)|arse (aproximativ 0,027 kcal pe pas)
+Sync Apple Health|Sincronizează Apple Health
+Not synced yet|Încă nesincronizat
+Synced|Sincronizat
+Health sync failed:|Sincronizarea Health a eșuat:
+Copy |Copiază 
+Protein|Proteine
+Carbs|Carbohidrați
+Fat|Grăsimi
+Fiber|Fibre
+Good morning|Bună dimineața
+Good afternoon|Bună ziua
+Good evening|Bună seara
+kcal left|kcal rămase
+kcal over|kcal peste țintă
+over target|peste țintă
+Log food|Adaugă mâncare
+Log sleep|Notează somnul
+Log last night|Notează noaptea trecută
+Scan a label|Scanează o etichetă
+Import from Health|Importă din Health
+taken today|luate azi
+today|azi
+goal|țintă
+steps|pași
+burned|arse
+Vitamins and minerals|Vitamine și minerale
+Vitamins and supplements|Vitamine și suplimente
+Nothing counted yet.|Nimic numărat încă.
+From estimated foods plus supplements you tick that have an amount. Compared with typical adult amounts.|Din alimentele estimate plus suplimentele bifate care au o cantitate. Comparat cu cantitățile tipice pentru adulți.
+Add food|Adaugă mâncare
+Describe it, e.g. 2 scrambled eggs, buttered toast, small orange juice|Descrie, de ex. 2 ouă jumări, pâine prăjită cu unt, un pahar mic de suc de portocale
+📷 Photo|📷 Poză
+🎲 Surprise me|🎲 Surprinde-mă
+Search common foods: egg, rice, banana…|Caută alimente comune: ou, orez, banană…
+Saved meals|Mese salvate
+Copy yesterday|Copiază ieri
+What did you eat?|Ce ai mâncat?
+Leave kcal blank to calculate from macros|Lasă kcal gol pentru a calcula din macronutrienți
+Nothing logged yet. Add your first meal above.|Nimic adăugat încă. Adaugă prima masă mai sus.
+Save these as a meal|Salvează ca masă
+Name this meal|Denumește această masă
+Delete this saved meal?|Ștergi această masă salvată?
+Delete saved meal|Șterge masa salvată
+No match. Add it by hand below.|Niciun rezultat. Adaugă manual mai jos.
+Describe the food or add a photo first.|Descrie mâncarea sau adaugă mai întâi o poză.
+Estimating…|Se estimează…
+Photo added. Tap Estimate.|Poză adăugată. Apasă Estimează.
+Filled in below. These are rough estimates, so adjust if needed, then tap Add.|Completat mai jos. Sunt estimări aproximative, ajustează dacă e nevoie, apoi apasă Adaugă.
+Couldn’t estimate (|Nu am putut estima (
+Add a free AI key in Other > Settings to use estimates.|Adaugă o cheie AI gratuită în Altele > Setări pentru a folosi estimările.
+Body and activity|Corp și activitate
+Weight (kg)|Greutate (kg)
+Steps (goal|Pași (țintă
+Water (ml, goal|Apă (ml, țintă
+Dose label|Etichetă doză
+Counts toward… (optional)|Contează pentru… (opțional)
+Use the unit shown. Example: 1000 IU of vitamin D is 25 µg.|Folosește unitatea afișată. Exemplu: 1000 UI de vitamina D înseamnă 25 µg.
+Vitamin A|Vitamina A
+Vitamin B12|Vitamina B12
+Vitamin B1|Vitamina B1
+Vitamin B2|Vitamina B2
+Vitamin B6|Vitamina B6
+Vitamin C|Vitamina C
+Vitamin D|Vitamina D
+Vitamin E|Vitamina E
+Vitamin K|Vitamina K
+Niacin (B3)|Niacină (B3)
+Folate (B9)|Folat (B9)
+Omega-3 fats|Grăsimi omega-3
+Meal idea|Idee de masă
+Breakfast idea|Idee de mic dejun
+Snack idea|Idee de gustare
+Fits your remaining|Se potrivește cu restul de
+kcal. You still need about|kcal. Mai ai nevoie de aproximativ
+g protein.|g de proteine.
+You’re about at your calorie target for the day. A glass of water or a tea would fit.|Ești aproape de ținta de calorii pe azi. Un pahar cu apă sau un ceai s-ar potrivi.
+Nothing on my list fits your remaining calories. A light snack or water could do.|Nimic din lista mea nu se potrivește cu caloriile rămase. O gustare ușoară sau apă ar fi suficiente.
+Best|Cel mai bun
+log a food every day|adaugă o mâncare în fiecare zi
+the flame turns purple at 100|flacăra devine mov la 100
+purple flame unlocked|flacără mov deblocată
+1 day streak|1 zi consecutivă
+day streak|zile consecutive
+Revives left this month:|Salvări rămase luna aceasta:
+Revive my streak (uses|Salvează-mi seria (folosește
+No revives left until next month.|Nicio salvare rămasă până luna viitoare.
+A revive covers a missed day. Your streak is intact, or too many days were missed.|O salvare acoperă o zi ratată. Seria ta este intactă sau au fost ratate prea multe zile.
+Streak revived|Serie salvată
+Your goals|Obiectivele tale
+Protein / carbs / fat|Proteine / carbohidrați / grăsimi
+per day|pe zi
+per night|pe noapte
+per week|pe săptămână
+Achievements ·|Realizări ·
+Unlocked|Deblocat
+Badge unlocked:|Insignă deblocată:
+of|din
+First bite|Prima îmbucătură
+Log your first food|Adaugă prima mâncare
+Food diarist|Jurnal alimentar
+Log 100 foods|Adaugă 100 de alimente
+On a roll|Pe val
+3-day logging streak|Serie de 3 zile de înregistrare
+Week warrior|Războinicul săptămânii
+7-day logging streak|Serie de 7 zile de înregistrare
+Two weeks strong|Două săptămâni de forță
+14-day logging streak|Serie de 14 zile de înregistrare
+Habit built|Obicei format
+30-day logging streak|Serie de 30 de zile de înregistrare
+Protein pro|Expert în proteine
+Hit your protein on 7 days|Atinge ținta de proteine 7 zile
+On target|Pe țintă
+Land within 10% of calories on 7 days|Încadrează-te în 10% din calorii 7 zile
+Step master|Maestru al pașilor
+Reach your step goal on 7 days|Atinge ținta de pași 7 zile
+Big mover|Mare călător
+Walk 15,000 steps in a day|Fă 15.000 de pași într-o zi
+Well hydrated|Bine hidratat
+Reach your water goal on 5 days|Atinge ținta de apă 5 zile
+Sleep tracker|Urmărire somn
+Log 7 nights of sleep|Notează 7 nopți de somn
+Well rested|Bine odihnit
+Meet your sleep goal on 5 nights|Atinge ținta de somn 5 nopți
+Vitamin habit|Obicei cu vitamine
+Take all supplements on 7 days|Ia toate suplimentele 7 zile
+Getting moving|În mișcare
+Log 5 workouts|Notează 5 antrenamente
+Iron will|Voință de fier
+Log 20 workouts|Notează 20 de antrenamente
+Time well spent|Timp bine folosit
+Train 600 minutes in total|Antrenează-te 600 de minute în total
+Regular weigh-in|Cântărire regulată
+Log your weight 5 times|Notează-ți greutatea de 5 ori
+First kilo|Primul kilogram
+Lose 1 kg from your first weigh-in|Pierde 1 kg față de prima cântărire
+Halfway there|La jumătatea drumului
+Reach 50% of your weight goal|Atinge 50% din obiectivul de greutate
+Goal reached|Obiectiv atins
+Reach your goal weight|Atinge greutatea țintă
+Meal prepper|Pregătitor de mese
+Save a meal|Salvează o masă
+Label detective|Detectiv de etichete
+Scan 5 labels|Scanează 5 etichete
+Safe and sound|În siguranță
+Export a backup|Exportă o copie de rezervă
+Steps and exercise come from Apple Watch through Health sync|Pașii și exercițiile vin de la Apple Watch prin sincronizarea Health
+active kcal today|kcal active azi
+Steps goal|Țintă pași
+Exercise goal (min/day)|Țintă exerciții (min/zi)
+Exercise goal|Țintă exerciții
+This week|Săptămâna aceasta
+150 minutes a week is the usual adult guideline.|150 de minute pe săptămână este recomandarea obișnuită pentru adulți.
+workouts logged this week.|antrenamente înregistrate săptămâna aceasta.
+workout logged this week.|antrenament înregistrat săptămâna aceasta.
+By type, this week|Pe tipuri, săptămâna aceasta
+Personal bests|Recorduri personale
+Longest workout|Cel mai lung antrenament
+Most steps in a day|Cei mai mulți pași într-o zi
+Total workouts|Total antrenamente
+Log a workout|Notează un antrenament
+kcal burned (optional)|kcal arse (opțional)
+Notes: exercises, sets, distance…|Note: exerciții, serii, distanță…
+Save workout|Salvează antrenamentul
+No workouts yet. Log your first session above.|Niciun antrenament încă. Notează prima sesiune mai sus.
+History|Istoric
+Calories burned|Calorii arse
+active today (kcal)|active azi (kcal)
+total today, estimated|total azi, estimat
+Resting burn (estimate)|Consum în repaus (estimare)
+Resting burn|Consum în repaus
+Active this week|Active săptămâna aceasta
+Total is active calories plus your estimated resting burn for the whole day. Active calories come from Apple Watch through Health sync, or from workouts you log.|Totalul este calorii active plus consumul estimat în repaus pe toată ziua. Caloriile active vin de la Apple Watch prin sincronizarea Health sau din antrenamentele notate.
+Strength|Forță
+Functional strength|Forță funcțională
+Run|Alergare
+Walk|Mers
+Hike|Drumeție
+Cycling|Ciclism
+Swim|Înot
+Rowing|Canotaj
+Elliptical|Eliptică
+Stair climber|Urcat scări
+Dance|Dans
+Boxing|Box
+Tennis|Tenis
+Basketball|Baschet
+Soccer|Fotbal
+Skiing|Schi
+Snowboarding|Snowboard
+Jump rope|Coardă
+Mixed cardio|Cardio mixt
+Mind and body|Minte și corp
+Cooldown|Revenire
+Weekly averages|Medii săptămânale
+Last 7 days versus the week before. Food averages count days you logged food.|Ultimele 7 zile față de săptămâna dinainte. Mediile alimentare numără zilele în care ai adăugat mâncare.
+vs last week|față de săptămâna trecută
+Active calories|Calorii active
+Goals hit, last 7 days|Obiective atinse, ultimele 7 zile
+Protein goal|Țintă proteine
+Calories on target|Calorii pe țintă
+Sleep goal (hours)|Țintă somn (ore)
+Sleep goal|Țintă somn
+Water goal|Țintă apă
+days|zile
+7 days:|7 zile:
+30 days:|30 zile:
+Log your weight on at least two days to see a trend.|Notează-ți greutatea în cel puțin două zile pentru a vedea o tendință.
+dashed = goal|linia punctată = țintă
+Weight trend|Tendința greutății
+min/day|min/zi
+kcal/day|kcal/zi
+Log a night|Notează o noapte
+Night ending on|Noapte încheiată pe
+Quality (1–5)|Calitate (1–5)
+Bedtime|Ora de culcare
+Wake up|Trezire
+Save night|Salvează noaptea
+7-day average|Medie pe 7 zile
+Selected night|Noaptea selectată
+Sleep debt this week:|Deficit de somn săptămâna aceasta:
+Log a night to see your weekly balance.|Notează o noapte pentru a vedea bilanțul săptămânal.
+Last 7 days|Ultimele 7 zile
+quality|calitate
+night ending|noapte încheiată
+no entry for|nicio înregistrare pentru
+Goals and targets|Obiective și ținte
+Enter your details to get daily targets.|Introdu datele tale pentru a primi țintele zilnice.
+Sex (for the formula)|Sex (pentru formulă)
+Age|Vârstă
+Height (cm)|Înălțime (cm)
+Current weight (kg)|Greutate curentă (kg)
+Goal weight (kg)|Greutate țintă (kg)
+Daily steps goal|Țintă zilnică de pași
+Activity level|Nivel de activitate
+Moderate (3–5/wk)|Moderat (3–5/săpt.)
+Very active (6–7/wk)|Foarte activ (6–7/săpt.)
+Pace (kg per week)|Ritm (kg pe săptămână)
+Your daily intake|Aportul tău zilnic
+Maintenance|Menținere
+protein|proteine
+carbs|carbohidrați
+fat|grăsimi
+fiber|fibre
+Water ≈|Apă ≈
+ml/day.|ml/zi.
+Target is held at a safe minimum, so your pace may be slower than selected.|Ținta este menținută la un minim sigur, deci ritmul poate fi mai lent decât cel ales.
+These are estimates (|Acestea sunt estimări (
+protein 1.8 g/kg, fat 25% of calories|proteine 1,8 g/kg, grăsimi 25% din calorii
+not medical advice. Check with a doctor or dietitian before major changes.|nu sfaturi medicale. Consultă un medic sau nutriționist înainte de schimbări majore.
+AI key (optional)|Cheie AI (opțional)
+Needed for the label scanner and food estimates when this page is not opened inside Claude. Get a free key at aistudio.google.com. Photos you scan are sent to Google. Never share this key.|Necesară pentru scanerul de etichete și estimările alimentare când pagina nu este deschisă în Claude. Obține o cheie gratuită la aistudio.google.com. Pozele scanate sunt trimise la Google. Nu da niciodată cheia altcuiva.
+Paste Gemini API key|Lipește cheia API Gemini
+Save key|Salvează cheia
+Test and pick model|Testează și alege modelul
+Saved.|Salvat.
+Auto follows your phone. Light is the beige theme.|Auto urmează telefonul. Luminos este tema bej.
+Your data|Datele tale
+Saved in this browser only.|Salvate doar în acest browser.
+Last backup:|Ultima copie:
+You haven’t backed up yet.|Nu ai făcut încă nicio copie.
+Export keeps it safe or moves it to another device.|Exportul le păstrează în siguranță sau le mută pe alt dispozitiv.
+That file could not be read.|Acest fișier nu a putut fi citit.
+Works. Using model|Funcționează. Folosesc modelul
+Paste a key first.|Lipește mai întâi o cheie.
+Testing…|Se testează…
+Key is valid but no model would run:|Cheia este validă, dar niciun model nu a funcționat:
+Key is valid but no suitable model was listed.|Cheia este validă, dar niciun model potrivit nu a fost listat.
+Google says:|Google spune:
+Couldn’t reach Google (|Nu am putut contacta Google (
+). If it says Load failed, your browser may be blocking the request.|). Dacă scrie „Load failed”, browserul poate bloca cererea.
+Apple Health sync|Sincronizare Apple Health
+Health → Ledger|Health → Jurnal
+Ledger → Health|Jurnal → Health
+Health sync|Sincronizare Health
+Your Apple Watch already saves steps and weight to Health. Run your “Health to Ledger” Shortcut, then paste what it copied.|Apple Watch salvează deja pașii și greutatea în Health. Rulează scurtătura „Health to Ledger”, apoi lipește ce a copiat.
+Import into|Importă în
+Copies this day’s weight, water and nutrition. Then run your “Ledger to Health” Shortcut to log them.|Copiază greutatea, apa și nutriția acestei zile. Apoi rulează scurtătura „Ledger to Health” pentru a le înregistra.
+for Health|pentru Health
+Set up the Shortcuts (once)|Configurează scurtăturile (o dată)
+Find Health Samples: Steps, start date is today, then Calculate Statistics (Sum).|Find Health Samples: Steps, data de început este azi, apoi Calculate Statistics (Sum).
+Find Health Samples: Weight, newest first, limit 1.|Find Health Samples: Weight, cele mai noi primele, limită 1.
+Copy to Clipboard.|Copy to Clipboard.
+Get Clipboard, then Get Dictionary from Input.|Get Clipboard, apoi Get Dictionary from Input.
+Log Health Sample for Weight, Water, Dietary Energy, Protein, Carbohydrates and Total Fat, each from its dictionary key.|Log Health Sample pentru Weight, Water, Dietary Energy, Protein, Carbohydrates și Total Fat, fiecare din cheia sa din dicționar.
+Web pages can’t read Apple Health directly, so each direction takes one tap.|Paginile web nu pot citi direct Apple Health, așa că fiecare direcție necesită o atingere.
+Fully automatic sync needs a native iOS app.|Sincronizarea complet automată necesită o aplicație iOS nativă.
+For Apple Watch exercise minutes and active calories, add two more Find Health Samples (Exercise Minutes and Active Energy, each summed for today) and put them in your text with the keys exercise and active.|Pentru minutele de exercițiu și caloriile active de la Apple Watch, adaugă încă două acțiuni Find Health Samples (Exercise Minutes și Active Energy, fiecare însumat pentru azi) și pune-le în text cu cheile exercise și active.
+Imported|Importat
+record(s). Check the Today tab.|înregistrare(i). Verifică fila Azi.
+Could not read that. Paste the text your Shortcut copied.|Nu am putut citi. Lipește textul copiat de scurtătură.
+Copied. Now run your Shortcut.|Copiat. Acum rulează scurtătura.
+Copy the text below by hand.|Copiază textul de mai jos manual.
+Nothing to import. Run your Health Shortcut first, then tap this again.|Nimic de importat. Rulează mai întâi scurtătura Health, apoi apasă din nou.
+Label scanner|Scaner de etichete
+Photograph the ingredients list or nutrition label of food, supplements, shampoo, skin care and more. Get the whole label in frame, in good light.|Fotografiază lista de ingrediente sau eticheta nutrițională a alimentelor, suplimentelor, șamponului, produselor de îngrijire și altele. Încadrează toată eticheta, cu lumină bună.
+Take photo|Fă o poză
+Choose photo|Alege o poză
+Scan barcode|Scanează codul de bare
+Barcode photo|Poză cod de bare
+Barcode|Cod de bare
+Or type the number|Sau scrie numărul
+Search by name, e.g. Milbona yogurt|Caută după nume, ex. iaurt Milbona
+Lidl, Kaufland and other store brands are found when someone has added them to Open Food Facts. Also checks beauty products and US barcodes.|Mărcile proprii Lidl, Kaufland și altele se găsesc dacă cineva le-a adăugat în Open Food Facts. Verifică și produse cosmetice și coduri de bare din SUA.
+Matches|Rezultate
+Reading the label…|Se citește eticheta…
+Starting camera…|Se pornește camera…
+Point the camera at the barcode.|Îndreaptă camera spre codul de bare.
+Reading barcode…|Se citește codul de bare…
+Looking up|Se caută
+Searching…|Se caută…
+Enter the full barcode number.|Introdu numărul complet al codului de bare.
+Type at least 3 letters.|Scrie cel puțin 3 litere.
+Could not load the barcode reader|Nu am putut încărca cititorul de coduri de bare
+Could not read a barcode in that photo. Try closer and well lit, or type the number.|Nu am putut citi un cod de bare din poză. Încearcă mai aproape și cu lumină bună sau scrie numărul.
+Camera or reader unavailable (|Camera sau cititorul nu sunt disponibile (
+). Use Barcode photo or type the number.|). Folosește poza cu codul de bare sau scrie numărul.
+Not found (|Negăsit (
+). Try Search by name, or photograph the label.|). Încearcă căutarea după nume sau fotografiază eticheta.
+No matches. Try other words or photograph the label.|Niciun rezultat. Încearcă alte cuvinte sau fotografiază eticheta.
+Search failed (|Căutarea a eșuat (
+Could not reach the product database (|Nu am putut contacta baza de date de produse (
+Couldn’t analyze that photo (|Nu am putut analiza poza (
+To scan, add a free AI key in Other > Settings, or open this page inside Claude.|Pentru scanare, adaugă o cheie AI gratuită în Altele > Setări sau deschide această pagină în Claude.
+Found|Am găsit
+but it has no ingredient list. Photograph the label instead.|dar nu are listă de ingrediente. Fotografiază eticheta.
+Could not analyze that product (|Nu am putut analiza produsul (
+Good choice|Alegere bună
+Okay in moderation|În regulă cu moderație
+Best avoided|Mai bine evitat
+Not enough information to score|Informații insuficiente pentru scor
+score|scor
+Sold at|Vândut la
+Full ingredient list|Lista completă de ingrediente
+How the score is calculated|Cum se calculează scorul
+Nutrition comes from the Nutri-Score method, then adjusted for processing and additives. Plain water scores 100.|Nutriția provine din metoda Nutri-Score, apoi se ajustează pentru procesare și aditivi. Apa plată primește 100.
+Vitamins, minerals and omega-3|Vitamine, minerale și omega-3
+daily value|din valoarea zilnică
+Healthy compounds|Compuși sănătoși
+Helpful ingredients|Ingrediente utile
+Ingredients to watch|Ingrediente de urmărit
+high concern|risc ridicat
+medium concern|risc mediu
+low concern|risc scăzut
+Log 1 serving|Adaugă 1 porție
+Log 100 g|Adaugă 100 g
+Data from a community or government database that can contain errors.|Date dintr-o bază de date comunitară sau guvernamentală care poate conține erori.
+Read from your photo by AI, so check it against the label.|Citit din poza ta de către AI, așa că verifică-l cu eticheta.
+A rough guide, not medical advice.|Un ghid orientativ, nu sfat medical.
+Plain water, nothing added|Apă plată, fără adaosuri
+Starting point|Punct de plecare
+Nutrition (Nutri-Score|Nutriție (Nutri-Score
+Single whole ingredient|Ingredient integral unic
+Ultra-processed|Ultraprocesat
+Processed|Procesat
+Additives|Aditivi
+No nutrition table, judged as|Fără tabel nutrițional, evaluat ca
+whole food|aliment integral
+minimal food|aliment puțin procesat
+processed food|aliment procesat
+ultra food|aliment ultraprocesat
+Titanium dioxide (E171)|Dioxid de titan (E171)
+Banned as a food additive in the EU since 2022.|Interzis ca aditiv alimentar în UE din 2022.
+Synthetic food dye|Colorant alimentar sintetic
+Some dyes are linked to hyperactivity in children, so EU labels carry a warning.|Unii coloranți sunt asociați cu hiperactivitatea la copii, de aceea etichetele din UE conțin un avertisment.
+Nitrite or nitrate|Nitriți sau nitrați
+Used in cured meats, heavy intake is linked to higher colorectal cancer risk.|Folosiți în produsele din carne conservată; consumul ridicat este asociat cu un risc mai mare de cancer colorectal.
+BHA or BHT|BHA sau BHT
+Synthetic antioxidant with debated, limited evidence.|Antioxidant sintetic, cu dovezi limitate și dezbătute.
+Artificial sweetener|Îndulcitor artificial
+Considered safe at normal intake, long-term effects are still debated.|Considerat sigur la consum normal, efectele pe termen lung sunt încă dezbătute.
+Benzoate preservative|Conservant benzoat
+Can form small amounts of benzene with vitamin C in some drinks.|Poate forma cantități mici de benzen împreună cu vitamina C în unele băuturi.
+Emulsifier or thickener|Emulgator sau agent de îngroșare
+Some research links certain emulsifiers to gut inflammation.|Unele cercetări leagă anumiți emulgatori de inflamația intestinală.
+Phosphate additive|Aditiv cu fosfați
+High phosphate intake may matter for kidney health.|Aportul mare de fosfați poate conta pentru sănătatea rinichilor.
+MSG (E621)|Glutamat monosodic (E621)
+Generally recognized as safe, some people report sensitivity.|Recunoscut în general ca sigur, unele persoane raportează sensibilitate.
+Glucose-fructose syrup|Sirop de glucoză-fructoză
+Adds sugar with little else.|Adaugă zahăr fără prea multe altele.
+High sugar|Zahăr ridicat
+High salt|Sare ridicată
+High saturated fat|Grăsimi saturate ridicate
+Saturated fat|Grăsimi saturate
+g per 100 g supports digestion.|g la 100 g susțin digestia.
+g per 100 g.|g la 100 g.
+of the daily value per|din valoarea zilnică la
+US product data (USDA). Values per 100 g:|Date de produs din SUA (USDA). Valori la 100 g:
+Per serving:|Per porție:
+Per 100 g:|La 100 g:
+No Nutri-Score listed|Fără Nutri-Score listat
+Unknown product|Produs necunoscut
+Scanned product|Produs scanat
+Egg, large|Ou, mare
+2 eggs, scrambled|2 ouă jumări
+Banana, medium|Banană, medie
+Apple, medium|Măr, mediu
+Orange, medium|Portocală, medie
+Berries, 1 cup|Fructe de pădure, 1 cană
+Oatmeal, 1 cup cooked|Terci de ovăz, 1 cană gătit
+Greek yogurt, 170 g|Iaurt grecesc, 170 g
+Cottage cheese, 1 cup|Brânză cottage, 1 cană
+Whole milk, 1 cup|Lapte integral, 1 cană
+Chicken breast, 100 g cooked|Piept de pui, 100 g gătit
+Beef, lean, 100 g cooked|Vită slabă, 100 g gătită
+Salmon, 100 g cooked|Somon, 100 g gătit
+Tuna, canned, 100 g|Ton la conservă, 100 g
+White rice, 1 cup cooked|Orez alb, 1 cană gătit
+Brown rice, 1 cup cooked|Orez brun, 1 cană gătit
+Quinoa, 1 cup cooked|Quinoa, 1 cană gătită
+Pasta, 1 cup cooked|Paste, 1 cană gătite
+Bread, 1 slice|Pâine, 1 felie
+Tortilla, 8 in|Tortilla, 20 cm
+Potato, medium, baked|Cartof, mediu, copt
+Sweet potato, medium|Cartof dulce, mediu
+Lentils, 1 cup cooked|Linte, 1 cană gătită
+Black beans, 1 cup|Fasole neagră, 1 cană
+Hummus, 2 tbsp|Hummus, 2 linguri
+Broccoli, 1 cup|Broccoli, 1 cană
+Mixed salad, 2 cups|Salată mixtă, 2 căni
+Avocado, half|Avocado, jumătate
+Almonds, 28 g|Migdale, 28 g
+Peanut butter, 1 tbsp|Unt de arahide, 1 lingură
+Olive oil, 1 tbsp|Ulei de măsline, 1 lingură
+Honey, 1 tbsp|Miere, 1 lingură
+Dark chocolate, 28 g|Ciocolată neagră, 28 g
+Protein shake, 1 scoop|Shake proteic, 1 măsură
+Coffee with milk|Cafea cu lapte
+Orange juice, 1 cup|Suc de portocale, 1 cană
+Pizza slice|Felie de pizza
+Tofu, 100 g|Tofu, 100 g`;
+let ROm=null;
+function LOC(){return S.lang==='ro'?'ro-RO':undefined}
+function setLang(l){S.lang=l;save();location.reload()}
+function roInit(){const Xm={},Pl=[];ROXS.split('\n').forEach(l=>{const i=l.indexOf('|');if(i>0)Xm[l.slice(0,i)]=l.slice(i+1)});
+ROS.split('\n').forEach(l=>{const i=l.indexOf('|');if(i>0){const a=l.slice(0,i),b=l.slice(i+1);Pl.push([a,b,new RegExp((/^\w/.test(a)?'\\b':'')+a.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+(/\w$/.test(a)?'\\b':''),'g')])}});
+Pl.sort((x,y)=>y[0].length-x[0].length);ROm={X:Xm,P:Pl}}
+function trs(t){if(S.lang!=='ro'||typeof t!=='string')return t;if(!ROm)roInit();const s=t.trim();if(!s)return t;if(ROm.X[s]!=null)return t.replace(s,ROm.X[s]);let r=t;for(const p of ROm.P){if(r.indexOf(p[0])>=0)r=r.replace(p[2],()=>p[1])}return r}
+function trNode(root){if(S.lang!=='ro'||!root)return;if(root.nodeType===3){const v=root.nodeValue,r=trs(v);if(r!==v)root.nodeValue=r;return}
+if(root.nodeType!==1)return;const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT),a=[];let x;while(x=w.nextNode()){if(!/^(SCRIPT|STYLE|TEXTAREA)$/.test(x.parentNode.nodeName))a.push(x)}a.forEach(trNode);
+root.querySelectorAll('[placeholder],[aria-label]').forEach(e=>['placeholder','aria-label'].forEach(k=>{const v=e.getAttribute(k);if(v){const r=trs(v);if(r!==v)e.setAttribute(k,r)}}))}
+function roStart(){if(S.lang!=='ro'||window._ro)return;window._ro=1;document.documentElement.lang='ro';
+const al=window.alert.bind(window),pr=window.prompt.bind(window),cf=window.confirm.bind(window);window.alert=m=>al(trs(String(m)));window.prompt=(m,d)=>pr(trs(String(m)),d);window.confirm=m=>cf(trs(String(m)));
+const OPT={childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','aria-label']};
+const ob=new MutationObserver(ms=>{ob.disconnect();ms.forEach(m=>{if(m.type==='characterData')trNode(m.target);else if(m.type==='attributes'){const v=m.target.getAttribute(m.attributeName);if(v){const r=trs(v);if(r!==v)m.target.setAttribute(m.attributeName,r)}}else m.addedNodes.forEach(trNode)});ob.observe(document.body,OPT)});
+trNode(document.body);ob.observe(document.body,OPT)}
+function HK(){try{if(!window.Capacitor||!Capacitor.isNativePlatform||!Capacitor.isNativePlatform())return null;return _hk||(_hk=Capacitor.registerPlugin('LedgerHealth'))}catch(e){return null}}
+function hkQ(){if(!HK())return;clearTimeout(hkT);hkT=setTimeout(()=>hkSync(),5000)}
+async function hkPush(day){const h=HK(),d=getD(day),s=tot(day),mi=microOf(day),nut=Object.assign({kcal:s.k,protein:s.p,carbs:s.c,fat:s.f,fiber:s.fi},mi),out={},hs=Object.assign({},d.hs||{}),hv=d.hv||{};
+Object.keys(nut).forEach(k=>{const v=Math.round(nut[k]*10)/10;if(v>0||hs[k]){out[k]=v;if(v>0)hs[k]=1}});
+const o={date:day,nutrients:out};if(d.weight&&d.weight!==hv.weight)o.weightKg=d.weight;if(d.water&&d.water>(hv.water||0))o.waterDeltaMl=d.water-(hv.water||0);
+await h.writeDay(o);const dd=setD(day);dd.hs=hs;dd.hv={weight:d.weight||null,water:d.water||null}}
+async function hkPull(day){const h=HK(),r=await h.readDay({date:day}),d=setD(day);
+if(r.steps>0)d.steps=Math.round(r.steps);if(r.exerciseMin>0)d.exercise=Math.round(r.exerciseMin);if(r.activeKcal>0)d.active=Math.round(r.activeKcal);if(r.waterMl>0)d.water=Math.round(r.waterMl);if(r.weightKg>0)d.weight=Math.round(r.weightKg*10)/10;
+d.hv={weight:d.weight||null,water:d.water||null};
+if(r.sleepHours>0){const L=SL(),old=L[day];if(!old||old.src==='health')L[day]={bed:r.bed,wake:r.wake,h:r.sleepHours,q:old?old.q:3,src:'health'}}
+(r.workouts||[]).forEach(w=>{const id='hk-'+w.id;if(!S.workouts.some(x=>x.id===id))S.workouts.push({id,t:w.type,d:day,m:w.minutes,k:w.kcal,n:'Apple Watch'})})}
+async function hkSync(show){const h=HK();if(!h||hkBusy)return;hkBusy=true;
+try{await h.requestAccess();const td=todayStr(),ds=[...new Set([td,date])];if(!hkBack){hkBack=true;for(let i=1;i<7;i++)ds.push(shift(td,-i))}
+for(const x of ds){await hkPush(x);await hkPull(x)}
+HKMSG='Synced '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}
+catch(e){HKMSG='Health sync failed: '+(e&&e.message||e)}
+hkBusy=false;hkQuiet=true;save();hkQuiet=false;const a=document.activeElement;if(!a||!/INPUT|TEXTAREA|SELECT/.test(a.tagName||''))render()}
 function exp(){const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({...S,gkey:undefined}));a.download='daily-ledger-backup.json';a.click();S.lastBackup=todayStr();save()}
 function imp(el){const r=new FileReader();r.onload=()=>{try{S=Object.assign(S,JSON.parse(r.result));save();render()}catch(e){alert('That file could not be read.')}};if(el.files[0])r.readAsText(el.files[0])}
 function render(){$('#app').innerHTML=({home:vHome,today:vToday,streak:vStreak,train:vTrain,other:vOther,scan:vScan,badges:vBadges})[tab]();document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===(SUB.includes(tab)?'home':tab)));if(dir){const a=$('#app');a.classList.remove('sl','sr');void a.offsetWidth;a.classList.add(dir==='r'?'sr':'sl');dir='';window.scrollTo(0,0)}after()}
